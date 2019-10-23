@@ -6,25 +6,26 @@
 #define ar analogRead
 #include <Servo.h>
 Servo servo;
+int buttonPin = 8;
+  int sw = 0;
 
 void setup() {
   Serial.begin(9600);
-  pinMode(2,INPUT);
+ 
   servo.attach(11);
   servo.write(180);
+   pinMode(buttonPin, INPUT_PULLUP);
 }
 void loop() {
- /* int al;
-  al=ar(0)/2;
-  Serial.println(al);
-  servo.write(al); 
-  delay(50);*/
 
-  while(dr(2)!=HIGH);
-  servo.write(180);
-  delay(200);
-  while(dr(2)!=HIGH);
-  servo.write(70);
-  delay(200);
+  if (digitalRead(buttonPin) == LOW){
+    sw++;
+    delay(1000); 
+    if (sw>16){
+      sw=0;
+    }
+  }
+  servo.write(10*sw);
+  
   
 }
