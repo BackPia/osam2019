@@ -16,8 +16,9 @@ void setup() {
 int i=0;
 void loop() {
   // put your main code here, to run repeatedly:
-  if (mode==2){
-    irsend.sendSony(0xa90,remote);
+ if (mode ==2){
+    irsend.sendSony(0xa,remote);
     mode=0;
-  }
+    delay(1000);
+ }
 }

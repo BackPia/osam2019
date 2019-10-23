@@ -1,6 +1,7 @@
 #include "LedControl.h"
-#include "DHT.h"
 #include <SimpleTimer.h>
+#include <IRremote.h>
+#include <SoftwareSerial.h>
 
 #define minTime 1
 #define dw digitalWrite
@@ -10,42 +11,68 @@
 
 const byte dec_digits[] = {0b00111111, 0b00000110, 0b01011011, 0b01001111, 0b01100110, 0b01101101, 0b01111100, 0b00000111, 0b01111111, 0b01100111 };
 byte wave_Medium[7] = {B00000000,B01100000,B11110000, B11111001,B11111111};
-#define seg_data  2
-#define seg_clk   3
-#define seg_lat   4
-#define dht_PIN   9
-#define dot_cs    10
-#define dot_clk   11
-#define dot_din   12
+#define seg_data  4   //orange
+#define seg_clk   5   //yellow
+#define seg_lat   6   //blue
+#define dht_PIN   9   //orange
+#define dot_din   10  //orange
+#define dot_cs    11  //yellow
+#define dot_clk   12  //green
 
-int seg_num=0,seg_dot=0; //4*7segment
-int dot_mode=0;          //8*8dot
-int temp=0,waterlevel=0;
-SimpleTimer timer(minTime);
-LedControl lc = LedControl(dot_din,dot_clk,dot_cs,1);
-DHT dht(dht_PIN,DHT11);
+int seg_num=0,seg_dot=0,seg_mode=0; //4*7segment
+int dot_mode=0;                     //8*8dot
+int temp=0,waterlevel=0,temp_on=1;//temp,water senser
+int ir_trg=0,ir_data=0;             //ir control
+int bt_time=0,bt_trg=0;char bt_temp;//bluetooth
+SoftwareSerial btSerial(7,8);       //bluetooth
+SimpleTimer timer(minTime);         // 1ms timer interupt
+LedControl lc = LedControl(dot_din,dot_clk,dot_cs,1); //8*8 dotmatix
+IRsend irsend;                      // IRremote
 
-byte shiftbyte(byte b){
+byte shiftbyte(byte b){             // dot's byte shift
   byte temp=b&0b00000001;
   temp=temp<<7;
   b=b>>1|temp;
   return b;
 }
+double GetTemperature(int v)        //analog temp val -> double temp val
+{
+ double Temp;
+ Temp = log(10000.0 / (1024.0 / v - 1)); 
+ Temp = 1 / (0.001129148 + (0.000234125 + (0.0000000876741 * Temp * Temp))* Temp);
+ Temp = Temp - 273.15; // Convert Kelvin to Celcius
+// Temp = (Temp * 9.0) / 5.0 + 32.0; // Convert Celcius to Fahrenheit
+ return Temp;
+}
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(9600);         //시리얼 모니터 on
+  btSerial.begin(9600);       //블루투스 on
 
   // 8*8 dot init
   lc.shutdown(0,false);       // 첫 번째 드라이버의 절전모드를 해제
   lc.setIntensity(0,4);       // 밝기를 중간으로 설정
   lc.clearDisplay(0);         // 디스플레이 초기화
-  dht.begin();
+  lc.setRow(0,0,0b0);
+  lc.setRow(0,1,0b0);
+  lc.setRow(0,2,0b0);
+  lc.setRow(0,3,0b0);
+  lc.setRow(0,4,0b0);
+  lc.setRow(0,5,0b0);
+  lc.setRow(0,6,0b0);
+  lc.setRow(0,7,0b0);
 
   // 4*7 segment init
   pinMode(seg_data,OUTPUT);
   pinMode(seg_lat,OUTPUT);
   pinMode(seg_clk,OUTPUT);
-  
+
+  pinMode(A0,INPUT);
+  pinMode(A1,INPUT);
+  pinMode(A2,INPUT);
+  pinMode(A3,INPUT);
+  pinMode(A4,INPUT);
+  pinMode(A5,INPUT);
 }
 
 void loop() {
@@ -54,8 +81,43 @@ void loop() {
     temp_ms();
     seg_ms();
     dot_ms();
-    
+    ir_ms();
+    bt_ms();
     dot_mode=1;//==============================
+  }
+}
+
+
+void temp_ms(){
+  #define AVER 10
+  static int temp_seqcnt=0,temp_t[AVER],temp_seq=0;
+  long sum=0;
+  temp_seqcnt++;
+  if(temp_seqcnt>=100){ // ====================================500
+    temp_seqcnt=0;
+    waterlevel=analogRead(A0);    //water level senser
+    if(waterlevel<350){
+      waterlevel=0;
+    } else {
+      waterlevel=map(waterlevel,300,700,1,100);
+    }
+    
+    temp_t[temp_seq++]=int(GetTemperature(ar(A1))*100);   //temp senser
+    if(temp_seq>=AVER)temp_seq=0;
+    for(int i=0;i<AVER;i++)sum+=temp_t[i];
+    temp=int(sum/AVER);
+    seg_dot=3;
+
+    if(seg_mode==0)seg_num=temp;
+    
+ //   Serial.print("temp: ");  Serial.println(temp/100.0);    //debug
+ //   Serial.print("Wat%: ");  Serial.println(waterlevel);
+
+    //ir test ==============================================
+//    static int irn=0;
+//    ir_trg=1;
+//    ir_data=irn;
+//    irn=irn+1>=4?0:irn+1;
   }
 }
 void seg_ms() {
@@ -79,8 +141,6 @@ void seg_ms() {
    
     seg_seqcnt=0;
     seg_seq=seg_seq+1>=4?0:seg_seq+1;
-    seg_num++;
-    if(seg_num>9999)seg_num=0;
     dw(seg_lat,LOW);
   }
 }
@@ -128,17 +188,57 @@ void dot_ms(){
     }
   }
 }
-void temp_ms(){
-  static int temp_seqcnt=0;
-  temp_seqcnt++;
-  if(temp_seqcnt>=100){
-    temp_seqcnt=0;
-    temp=dht.readTemperature()-5 ;
-    waterlevel=analogRead(A0);
-    if(waterlevel<350){
-      waterlevel=0;
-    } else {
-      waterlevel=map(waterlevel,300,700,1,100);
+void ir_ms(){
+  if(ir_trg){
+    ir_trg=0;
+    irsend.sendSony(ir_data,12);
+  }
+}
+void bt_ms(){
+  static int cnt=0;
+  cnt++;
+  if(cnt>=1000){
+    cnt=0;
+    //블루투스에 35도|30% 또는 100 (알람) 문자열 전송
+    if(waterlevel>=90)bt_trg=1;
+    if(bt_trg==0){  // 35도|30%
+      char buf[20]={};
+      sprintf(buf,"%d℃|%02d%%",int(temp/100),waterlevel);
+      Serial.println(buf);
+      btSerial.write(buf);
+    }else{          // 100
+      bt_trg=0;
+      Serial.println("100");
+      btSerial.write("100");
     }
   }
+  if(btSerial.available()){
+    bt_temp = btSerial.read();
+    
+    switch(bt_temp) {
+      //차갑게
+      case 'A':
+        bt_time=btSerial.parseInt();
+        if(btSerial.read()=='.')break;
+        break;
+      //시원
+      case 'B':
+        bt_time=btSerial.parseInt();
+        if(btSerial.read()=='.')break;
+        break;
+      //따뜻
+      case 'C':
+        bt_time=btSerial.parseInt();
+        if(btSerial.read()=='.')break;
+        break;
+      //뜨겁
+      case 'D':
+        bt_time=btSerial.parseInt();
+        if(btSerial.read()=='.')break;
+        break;
+      }
+      Serial.print(bt_temp);
+      Serial.print("    ");
+      Serial.println(bt_time);
+    }
 }
