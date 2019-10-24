@@ -11,8 +11,8 @@
 
 ### 프로젝트 미리보기
 
-<img src="https://github.com/resources/img1.jpg?raw=true">
-<img src="https://github.com/resources/img2.png?raw=true">
+<img src="https://github.com/BackPia/osam2019/blob/master/resources/img1.jpg?raw=true">
+<img src="https://github.com/BackPia/osam2019/blob/master/resources/img2.png?raw=true">
 
 ### 알려진 문제점
 수위센서의 부정확한 데이터
