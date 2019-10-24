@@ -14,6 +14,8 @@
 #define RangeC 35
 #define RangeD 45
 
+#define waterFull 100
+
 const byte dec_digits[] = {0b00111111, 0b00000110, 0b01011011, 0b01001111, 0b01100110, 0b01101101, 0b01111100, 0b00000111, 0b01111111, 0b01100111 };
 byte seg_wave[]={0b00000111,0b00001000,0b00001110,0b00000001};
 byte wave_Medium[7] = {B00000000,B01100000,B11110000, B11111001,B11111111};
@@ -86,6 +88,9 @@ void setup() {
   pinMode(joy_xp,INPUT);
   pinMode(joy_yp,INPUT);
   pinMode(joy_bt,INPUT);
+
+  ir_trg=1;
+  ir_data=0;
 }
 
 void loop() {
@@ -104,11 +109,12 @@ void loop() {
 
 void temp_ms(){
   #define AVER 10
-  static int temp_seqcnt=0,temp_t[AVER],temp_seq=0;
+  static int temp_seqcnt=0,temp_t[AVER],temp_seq=0,t_cnt;
   long sum=0;
   temp_seqcnt++;
   if(temp_seqcnt>=100){
     temp_seqcnt=0;
+    
     waterlevel=analogRead(wat_lev);    //water level senser
  //   Serial.println(waterlevel);
     if(waterlevel<350){
@@ -118,6 +124,9 @@ void temp_ms(){
     } else {
       waterlevel=map(waterlevel,300,680,1,100);
     }
+    
+    if(mode==3)t_cnt++;
+    waterlevel=t_cnt/60;
     
     temp_t[temp_seq++]=int(GetTemperature(ar(temp_db))*100);   //temp senser
     if(temp_seq>=AVER)temp_seq=0;
@@ -184,6 +193,7 @@ void main_seq_ms(){
     case 2: // 블루투스 카운트다운
       wait_cnt--;
       seg_mode=1;
+      dot_mode=2;
       if(wait_cnt<=0){
         wait_cnt=1000;
         set_time--;
@@ -195,45 +205,46 @@ void main_seq_ms(){
       }
       break;
     case 3: // 물나오고 있는중
+      static int auto_control;
       seg_mode=0;
       dot_mode=1;
-      if(waterlevel<100&&set_servo==0){
+      if(waterlevel<waterFull&&set_servo==0){
         switch(set_temp){
           case RangeA:
-            ir_trg=1;Serial.println("set1");
-            ir_data=0b0011;
+            ir_trg=1;
+            ir_data=0b0001;
             set_servo=ir_data;
             break;
           case RangeB:
-            ir_trg=1;Serial.println("set2");
-            ir_data=0b0110;
+            ir_data=0b0100;
             set_servo=ir_data;
+            ir_trg=1;
             break;
           case RangeC:
-            ir_trg=1;Serial.println("set3");
-            ir_data=0b1001;
+            ir_trg=1;
+            ir_data=0b0100;
             set_servo=ir_data;
             break;
           case RangeD:
-            ir_trg=1;Serial.println("set4");
-            ir_data=0b1100;
+            ir_trg=1;
+            ir_data=0b0100;
             set_servo=ir_data;
             break;
-            default: Serial.println("other");
         }
       }
       if(joy_state!=0){
         mode=1;
       }
-      if(waterlevel>=100&&set_servo!=0){Serial.println("wat");
+      if(waterlevel>=waterFull){Serial.println("wat");
         ir_trg=1;
         ir_data=0b0000;
         set_servo=ir_data;
+        mode=4;
       }
-      if(cht_trg==1&&dr(joy_bt)==HIGH){Serial.println("chatout");
+      if(cht_trg==1&&dr(joy_bt)==HIGH){
         cht_trg=0;
       }
-      if(cht_trg==0&&dr(joy_bt)==LOW){Serial.println("chatin");
+      if(cht_trg==0&&dr(joy_bt)==LOW){
         cht_trg=1;
         if(set_servo!=0b10000){
           ir_trg=1;Serial.println("ss");
@@ -243,7 +254,20 @@ void main_seq_ms(){
           set_servo=0;
         }
       }
+
+      if((set_temp+5)<(temp/100)&&auto_control==0){Serial.println("u");
+        auto_control=1;
+        ir_trg=1; ir_data=0b0001;
+        set_servo=ir_data;
+      }
+      if((set_temp-5)>(temp/100)&&auto_control==1){Serial.println("d");
+        auto_control=0;
+        ir_trg=1; ir_data=0b0100;
+        set_servo=ir_data;
+      }
       break;
+    case 4:
+            break;
   }
 }
 
@@ -341,7 +365,7 @@ void dot_ms(){
     if(dot_trg==1){
       dot_trg=0;
       dot_seq=64;
-      dot_seqcnt=dot_t=set_time*1000/64;
+      dot_seqcnt=dot_t=set_time/64*1000;
       dot_seqcnt=0;
     }
     dot_seqcnt++;
@@ -352,11 +376,20 @@ void dot_ms(){
       for(int i=0;i<8;i++){
         byte buf=0;
         for(int j=min(dot_seq-((7-i)*8),7);j>=0;j--)buf|=1<<j;
-        lc.setRow(0,i,buf);
+   //     lc.setRow(0,i,buf);
       }
     }
   } else if(dot_mode==3){
-    
+    static int old;
+    if(old!=set_temp){
+      old=set_temp;
+      
+      for(int i=0;i<8;i++){
+        byte buf=0;
+        for(int j=min(old-((7-i)*8),7);j>=0;j--)buf|=1<<j;
+        lc.setRow(0,i,buf);
+      }
+    }
   }
 }
 void ir_ms(){
@@ -364,7 +397,7 @@ void ir_ms(){
   if(ir_trg==1){
     ir_trg=2;
     irsend.sendSony(ir_data,12);
-    Serial.println(ir_data);              //debug------------------------------
+ //   Serial.println(ir_data);              //debug------------------------------
   }
   if(ir_trg>=2){
     cnt++;
@@ -372,7 +405,7 @@ void ir_ms(){
       cnt=0;
       ir_trg++;
       irsend.sendSony(ir_data,12);
-      Serial.println(ir_data);              //debug----------------------------
+   //   Serial.println(ir_data);              //debug----------------------------
       if(ir_trg>=3){
         ir_trg=0;
       }
@@ -385,7 +418,7 @@ void bt_ms(){
   if(cnt>=1000){
     cnt=0;
     //블루투스에 35도|30% 또는 100 (알람) 문자열 전송
-    if(waterlevel>=90)bt_trg=1;
+    if(waterlevel>=waterFull)bt_trg=1;
     if(bt_trg==0){  // 35도|30%
       char buf[20]={}; sprintf(buf,"%d℃    %2d%%",int(temp/100),waterlevel);// Arduino to Bluetooth data 
       btSerial.write(buf);
