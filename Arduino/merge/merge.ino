@@ -36,7 +36,7 @@ byte wave_Medium[7] = {B00000000,B01100000,B11110000, B11111001,B11111111};
 int mode,set_temp=35,set_time,set_servo;//main mode
 int seg_num,seg_dot,seg_mode,seg_blk;//4*7segment
 int dot_mode,dot_num,dot_trg;        //8*8dot
-int temp,waterlevel;                 //temp,water senser
+int temp,waterlevel,t_cnt;           //temp,water senser
 int ir_trg=0,ir_data=0;               //ir control
 int bt_time=0,bt_trg=0;char bt_temp=0;//bluetooth
 int joy_state=0;                      //joystic
@@ -109,7 +109,7 @@ void loop() {
 
 void temp_ms(){
   #define AVER 10
-  static int temp_seqcnt=0,temp_t[AVER],temp_seq=0,t_cnt;
+  static int temp_seqcnt=0,temp_t[AVER],temp_seq=0;
   long sum=0;
   temp_seqcnt++;
   if(temp_seqcnt>=100){
@@ -126,7 +126,8 @@ void temp_ms(){
     }
     
     if(mode==3)t_cnt++;
-    waterlevel=t_cnt/60;
+    waterlevel=min(t_cnt/5,100);
+    Serial.print(t_cnt); Serial.print(" "); Serial.println(waterlevel);
     
     temp_t[temp_seq++]=int(GetTemperature(ar(temp_db))*100);   //temp senser
     if(temp_seq>=AVER)temp_seq=0;
@@ -267,7 +268,29 @@ void main_seq_ms(){
       }
       break;
     case 4:
-            break;
+      static int rstcnt=0;
+      if(cht_trg==0&&dr(joy_bt)==LOW){
+        rstcnt++;
+        if(rstcnt>=3000){
+          rstcnt=0;
+          mode=0;
+          set_temp=35;
+          set_time=0;
+          set_servo=0;
+          dot_mode=0;
+          t_cnt=0;
+          seg_mode=2;
+          lc.setRow(0,0,0b0);
+          lc.setRow(0,1,0b0);
+          lc.setRow(0,2,0b0);
+          lc.setRow(0,3,0b0);
+          lc.setRow(0,4,0b0);
+          lc.setRow(0,5,0b0);
+          lc.setRow(0,6,0b0);
+          lc.setRow(0,7,0b0);
+        }
+      }
+      break;
   }
 }
 
