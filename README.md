@@ -21,7 +21,7 @@
 ## 제작자
 
 = BathOverFlow
-  - 공군 군무원 김동훈 (@gmail.com)
+  - 공군 군무원 김동훈 (kdh.airforce@gmail.com)
   - 공군 상병   백창수 (qorckdtn3231@gmail.com)
-  - 육군 병장   김재현 (@gmail.com)
-  - 육군 상병	정병준 (@gmail.com)
+  - 육군 병장   김재현 (k53715115@gmail.com)
+  - 육군 상병	정병준 (beng0516@naver.com)
